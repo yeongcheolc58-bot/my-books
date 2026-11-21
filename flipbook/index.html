@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D 플립북 전자책 뷰어</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.min.js"></script>
+  <style>
+    body { margin: 0; background: #2c2c2c; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+    #loading { font-size: 18px; margin-bottom: 15px; }
+    #book-container { width: 92vw; height: 84vh; display: flex; align-items: center; justify-content: center; }
+    .page { background: #fff; box-shadow: 0 0 15px rgba(0,0,0,0.5); overflow: hidden; }
+    .page canvas { width: 100%; height: 100%; display: block; }
+    #controls { position: fixed; bottom: 15px; display: flex; gap: 15px; align-items: center; background: rgba(0,0,0,0.7); padding: 8px 20px; border-radius: 25px; }
+    button { background: #4caf50; color: #fff; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-size: 15px; }
+    button:hover { background: #45a049; }
+  </style>
+</head>
+<body>
+  <div id="loading">책을 펼치는 중입니다... 잠시만 기다려 주세요.</div>
+  <div id="book-container"><div id="flipbook"></div></div>
+  <div id="controls" style="display:none;">
+    <button id="prev-btn">◀ 이전 장</button>
+    <span id="page-info">1 / 1</span>
+    <button id="next-btn">다음 장 ▶</button>
+  </div>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const params = new URLSearchParams(window.location.search);
+    const pdfFile = params.get('file') || 'seniorjob_1.pdf';
+
+    async function loadFlipbook() {
+      try {
+        const pdf = await pdfjsLib.getDocument(pdfFile).promise;
+        const flipbookEl = document.getElementById('flipbook');
+        let pageWidth = 450, pageHeight = 636;
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          document.getElementById('loading').textContent = `페이지 불러오는 중 (${i} / ${pdf.numPages})...`;
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.5 });
+          if (i === 1) {
+            const ratio = viewport.width / viewport.height;
+            pageHeight = Math.min(window.innerHeight * 0.80, 680);
+            pageWidth = Math.round(pageHeight * ratio);
+          }
+          const pageDiv = document.createElement('div');
+          pageDiv.className = 'page';
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+          pageDiv.appendChild(canvas);
+          flipbookEl.appendChild(pageDiv);
+        }
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('controls').style.display = 'flex';
+
+        const pageFlip = new St.PageFlip(flipbookEl, {
+          width: pageWidth,
+          height: pageHeight,
+          size: 'stretch',
+          minWidth: 280,
+          maxWidth: 650,
+          minHeight: 400,
+          maxHeight: 900,
+          showCover: true,
+          usePortrait: window.innerWidth < 768
+        });
+        pageFlip.loadFromHTML(document.querySelectorAll('.page'));
+
+        const updateInfo = () => {
+          document.getElementById('page-info').textContent = `${pageFlip.getCurrentPageIndex() + 1} / ${pdf.numPages}`;
+        };
+        updateInfo();
+        pageFlip.on('flip', updateInfo);
+        document.getElementById('prev-btn').onclick = () => pageFlip.flipPrev();
+        document.getElementById('next-btn').onclick = () => pageFlip.flipNext();
+      } catch (err) {
+        document.getElementById('loading').textContent = 'PDF 파일을 찾을 수 없습니다. 파일 이름을 확인해 주세요: ' + pdfFile;
+      }
+    }
+    loadFlipbook();
+  </script>
+</body>
+</html>
